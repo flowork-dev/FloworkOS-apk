@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Flowork OS</title>
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+    <style>
+        /* [FIX HEADER OVERLAP] Force Header Down */
+        :root {
+            /* Increase header height to accommodate status bar */
+            --header-h: 100px !important;
+            /* Ensure content starts below the new header height */
+            --content-padding: 110px;
+        }
+
+        /* Override Global Header Style for this page */
+        .sys-header {
+            height: var(--header-h);
+            padding-top: 40px !important; /* Force status bar spacing */
+            align-items: center;
+        }
+
+        /* Push body content down */
+        #app-root {
+            padding-top: var(--content-padding) !important;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .rec-dot { width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; animation: pulse-red 2s infinite; }
+        .rec-ring { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+        /* Style untuk Auth Full Screen */
+        .auth-full-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            text-align: center;
+            padding: 20px;
+            /* Ensure auth screen is also safe from status bar */
+            padding-top: 60px;
+        }
+
+        .auth-full-container .login-input-area textarea,
+        .auth-full-container input.pin-input {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .auth-full-container h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        /* Animasi Creative Title Auth */
+        @keyframes title-glow {
+            0% { text-shadow: 0 0 10px rgba(84, 215, 246, 0.3); transform: scale(1); }
+            50% { text-shadow: 0 0 25px rgba(112, 107, 243, 0.6), 0 0 10px rgba(84, 215, 246, 0.5); transform: scale(1.02); }
+            100% { text-shadow: 0 0 10px rgba(84, 215, 246, 0.3); transform: scale(1); }
+        }
+
+        .creative-auth-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #fff 0%, #54d7f6 50%, #706bf3 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: title-glow 3s infinite ease-in-out;
+            letter-spacing: 1px;
+        }
+
+        /* Style tombol Register */
+        .register-link-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 30px;
+            margin-top: 15px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .register-link-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #54d7f6;
+            color: #fff;
+        }
+
+        /* [CSS FIX MAJOR] AUTH PAGE LAYOUT (BUKAN POPUP) */
+        .auth-page {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* Solid background gelap biar kerasa halaman beda */
+            background: #0f0f14;
+            z-index: 100002;
+            flex-direction: column;
+            /* Scrollable kalau konten kepanjangan/keyboard muncul */
+            overflow-y: auto;
+            padding: 20px;
+            padding-top: 60px; /* Safe area top for auth page */
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .auth-page.active {
+            display: flex;
+        }
+
+        /* Wrapper konten yang ajaib: Margin auto bikin dia center vertikal & horizontal otomatis */
+        .auth-content-wrapper {
+            margin: auto;
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 20px;
+        }
+
+        /* Textarea luas */
+        .auth-page textarea {
+            width: 100%;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #2dd4bf;
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            border-radius: 16px;
+            resize: none;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+            transition: border-color 0.3s;
+        }
+        .auth-page textarea:focus {
+            border-color: #54d7f6;
+            outline: none;
+        }
+
+        /* Tombol Navigasi di Bawah (Deket Jari) - STYLE GLOBAL */
+        .bottom-nav-btn {
+            margin-top: 30px; /* Jarak dari konten */
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            /* Biar center */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .bottom-nav-btn:active {
+            transform: scale(0.9);
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="os-bg"></div>
+
+    <svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+             <linearGradient id="core_grad_new" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2d2f45"/>
+                <stop offset="50%" stop-color="#706bf3"/>
+                <stop offset="100%" stop-color="#54d7f6"/>
+              </linearGradient>
+
+              <filter id="spinner_glow_new" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 3 -1" result="brightBlur"/>
+                <feMerge>
+                  <feMergeNode in="brightBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+
+              <g id="New_Flowork_Logo">
+                  <circle cx="256" cy="256" r="230"
+                          fill="none" stroke="#54d7f6" stroke-width="8" stroke-linecap="round"
+                          stroke-dasharray="200 150 50 150" filter="url(#spinner_glow_new)">
+                     <animateTransform attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="3s" repeatCount="indefinite" additive="sum"/>
+                  </circle>
+
+                  <circle cx="256" cy="256" r="200"
+                          fill="none" stroke="#706bf3" stroke-width="10" stroke-linecap="round"
+                          stroke-dasharray="100 80 30 80 100 80" filter="url(#spinner_glow_new)" opacity="0.8">
+                     <animateTransform attributeName="transform" type="rotate" from="360 256 256" to="0 256 256" dur="2.5s" repeatCount="indefinite" additive="sum"/>
+                  </circle>
+
+                  <circle cx="256" cy="26" r="6" fill="#ffffff" filter="url(#spinner_glow_new)">
+                      <animateTransform attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="3s" repeatCount="indefinite"/>
+                   </circle>
+
+                  <g transform="translate(102, 102) scale(0.6)">
+                    <path d="M100 80 L 220 80 L 220 200 L 160 200 L 160 432 L 100 432 Z" fill="url(#core_grad_new)" stroke="#3a3962" stroke-width="4"/>
+                    <path d="M260 80 L 412 80 L 412 180 L 260 180 Z" fill="#54d7f6" opacity="0.9"/>
+                    <path d="M260 220 L 360 220 L 360 320 L 260 320 Z" fill="#706bf3" opacity="0.9"/>
+                    <path d="M220 130 L 260 130" stroke="#ffd700" stroke-width="8" stroke-linecap="round"/>
+                    <path d="M220 270 L 260 270" stroke="#ffd700" stroke-width="8" stroke-linecap="round"/>
+                  </g>
+              </g>
+              </defs>
+    </svg>
+
+    <div id="auth-lang-container" style="position: fixed; top: 60px; left: 20px; z-index: 100001; display: none;">
+        <select class="lang-select-box" onchange="sys.setLang(this.value)">
+            <option value="en">🇬🇧 EN</option>
+            <option value="id">🇮🇩 ID</option>
+        </select>
+    </div>
+
+    <header class="sys-header">
+        <div class="brand-area" onclick="sys.goHome()">
+            <svg viewBox="0 0 512 512" class="logo-svg">
+                <use href="#New_Flowork_Logo"/>
+            </svg>
+        </div>
+
+        <div class="header-search-wrapper">
+            <i class="mdi mdi-magnify"></i>
+            <input type="text" data-i18n-placeholder="search_placeholder" placeholder="Search apps..." oninput="smartSearch(this.value)">
+        </div>
+
+        <div class="header-right">
+            <select class="lang-select-box" onchange="sys.setLang(this.value)" style="border: 1px solid var(--border); background: var(--item-bg); color: var(--text-main); margin-right: 10px;">
+                <option value="en">EN</option><option value="id">ID</option>
+            </select>
+            <button class="header-btn" onclick="toggleLeftSidebar()"><i class="mdi mdi-dots-vertical"></i></button>
+        </div>
+    </header>
+
+    <div id="app-root"><div id="native-root"></div></div>
+    <div class="backdrop" id="backdrop" onclick="closeAllSidebars()"></div>
+
+    <aside class="sidebar-left" id="sidebar-left">
+        <div class="profile-card" onclick="sys.openProfile()">
+            <div class="profile-pic" id="profile-avatar">G</div>
+            <div class="profile-info"><h4 id="profile-name">Guest</h4><span style="font-size:11px; opacity:0.7;" id="profile-status">Waiting Auth</span></div>
+        </div>
+        <div class="menu-list">
+            <div class="menu-item" onclick="sys.openProfile()"><i class="mdi mdi-account"></i> <span data-i18n="profile_title">Profile</span></div>
+            <div class="menu-item" onclick="sys.openWallet()"><i class="mdi mdi-wallet"></i> <span data-i18n="wallet_title">Crypto Wallet</span></div>
+            <div class="menu-item" onclick="sys.openVault()"><i class="mdi mdi-key-chain"></i> <span data-i18n="menu_api_keys">Manage API Keys</span></div>
+            <div class="menu-item" onclick="sys.openEngines()"><i class="mdi mdi-server-network" style="color:#0ea5e9;"></i> <span data-i18n="menu_my_engines">My Engines</span></div>
+            <div class="menu-item" onclick="toggleTheme()"><i class="mdi mdi-theme-light-dark"></i> <span data-i18n="menu_theme">Toggle Theme</span></div>
+            <div style="height:1px; background:var(--border); margin:10px 0;"></div>
+            <div class="menu-item" style="color:#ff7675" onclick="sys.logout()"><i class="mdi mdi-logout"></i> <span data-i18n="menu_exit">Exit Device</span></div>
+        </div>
+    </aside>
+
+    <aside class="sidebar-right" id="sidebar-right">
+        <div class="drawer-header">
+            <div class="drawer-title"><i class="mdi mdi-heart" style="color:#ff4757"></i> <span data-i18n="cat_favorites">FAVORITES</span></div>
+        </div>
+        <div class="search-wrapper">
+            <i class="mdi mdi-magnify"></i>
+            <input type="text" id="fav-search" data-i18n-placeholder="search_fav_placeholder" placeholder="Search favorites..." oninput="filterFavorites()">
+        </div>
+        <div class="sidebar-list-container custom-scroll">
+            <div id="sidebar-fav-list"></div>
+            <div id="sidebar-empty-msg" class="drawer-state" style="display:none;">
+                <i class="mdi mdi-heart-broken" style="font-size:32px; display:block; margin-bottom:10px;"></i>
+                <span data-i18n="no_favorites">No favorites yet.</span>
+            </div>
+        </div>
+        <button class="close-btn" onclick="toggleRightSidebar()"><i class="mdi mdi-close"></i></button>
+    </aside>
+
+    <div class="mobile-dock">
+        <div class="dock-content">
+            <div class="dock-icon" onclick="sys.goHome()" title="Home"><i class="mdi mdi-home"></i></div>
+            <div class="dock-icon recording" onclick="sys.toggleMenu()" title="Tools"><div class="rec-ring"><div class="rec-dot"></div></div></div>
+            <div class="dock-icon ai" onclick="sys.openAI()" title="AI"><i class="mdi mdi-robot"></i></div>
+            <div class="dock-icon" onclick="toggleRightSidebar()" title="Favorites"><i class="mdi mdi-heart"></i></div>
+        </div>
+    </div>
+
+    <div id="sys-header-toggle" class="app-fullscreen-toggle top" onclick="sys.toggleHeader()" style="display: none;">
+        <span id="header-ad-text" class="toggle-ad-text" onclick="sys.onAdClick(event)"></span>
+        <i class="mdi mdi-chevron-down"></i>
+    </div>
+    <div id="sys-dock-toggle" class="app-fullscreen-toggle bottom" onclick="sys.toggleDock()" style="display: none;">
+        <span id="footer-ad-text" class="toggle-ad-text" onclick="sys.onAdClick(event)"></span>
+        <i class="mdi mdi-chevron-up"></i>
+    </div>
+
+    <div id="loader"><div class="spinner"></div></div>
+    <div id="sys-toast" style="position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.85); color:white; padding:10px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:opacity 0.3s; z-index:999999;">Notification</div>
+
+    <div id="login-overlay" class="full-overlay" style="display: none;">
+
+        <div id="login-hero" class="auth-full-container">
+            <div style="width: 150px; height: 150px; margin-bottom: 30px;">
+                <svg viewBox="0 0 512 512" width="100%" height="100%"><use href="#New_Flowork_Logo"/></svg>
+            </div>
+
+            <h2 class="creative-auth-title" data-i18n="login_title">Flowork Engine Auth</h2>
+
+            <p data-i18n="login_slogan" class="auth-slogan">Create limitless creativity with Flowork OS</p>
+
+            <button class="auth-action-btn" onclick="sys.showLoginPopup()">
+                <i class="mdi mdi-login" style="font-size: 20px;"></i>
+                <span data-i18n="login_btn">Login</span>
+            </button>
+
+            <button class="register-link-btn" onclick="sys.openRegister(); setTimeout(sys.generateIdentity, 200);">
+                <i class="mdi mdi-account-plus-outline"></i>
+                <span data-i18n="reg_btn_main">Register New Account</span>
+            </button>
+        </div>
+
+        <div id="login-popup" class="auth-page">
+            <div class="auth-content-wrapper">
+                <h3 style="margin-top:0; color:#fff; font-size: 24px; margin-bottom: 30px; letter-spacing: 1px; text-align: center;" data-i18n="login_desc">Authentication Required</h3>
+
+                <textarea id="wallet-key-input" data-i18n-placeholder="login_placeholder" placeholder="Paste Private Key or Mnemonic..." autofocus></textarea>
+
+                <div style="display: flex; gap: 20px; margin-top: 10px; width: 100%; justify-content: center;">
+                    <button class="login-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); width: auto; padding: 0 30px; color: #0ea5e9;" onclick="sys.copyLoginInput()">
+                        <i class="mdi mdi-content-copy"></i> <span data-i18n="reg_btn_copy">Copy Code</span>
+                    </button>
+                    <button class="login-btn primary" style="width: auto; padding: 0 40px; font-size: 16px;" onclick="sys.handleLogin()">
+                        <i class="mdi mdi-login"></i> <span data-i18n="login_btn">Enter System</span>
+                    </button>
+                </div>
+
+                <button class="bottom-nav-btn" onclick="sys.hideLoginPopup()" title="Close">
+                    <i class="mdi mdi-close"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="profile-overlay" class="full-overlay" style="display: none;">
+        <div class="vault-card">
+            <div class="vault-header"><h3 data-i18n="profile_title"><i class="mdi mdi-account-circle"></i> Profile Settings</h3></div>
+
+            <div class="v-input-group">
+                <label data-i18n="profile_name_label">Display Name</label>
+                <input type="text" id="profile-name-input" placeholder="Your Name">
+                <label data-i18n="profile_avatar_label">Avatar (Image File)</label>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                    <div id="profile-avatar-preview" style="width: 50px; height: 50px; border-radius: 50%; background: #222; border: 1px solid #444; overflow: hidden; display: flex; align-items: center; justify-content: center;"><i class="mdi mdi-account" style="font-size: 24px; color: #555;"></i></div>
+                    <input type="file" id="profile-avatar-file" accept="image/*" style="display: none;" onchange="sys.handleAvatarSelect(event)">
+                    <button class="vault-btn" onclick="document.getElementById('profile-avatar-file').click()" data-i18n="profile_btn_upload">Upload Image</button>
+                    <input type="hidden" id="profile-avatar-base64">
+                </div>
+                <label data-i18n="profile_key_label" style="margin-top: 10px; color: #eab308; font-weight: bold;">Private Key (Login Code)</label>
+                <div id="profile-key-container" style="position: relative; margin-top: 5px;"></div>
+                <button class="vault-btn primary" style="margin-top: 15px;" onclick="sys.saveProfile()"><i class="mdi mdi-content-save"></i> <span data-i18n="profile_btn_save">Save Profile</span></button>
+            </div>
+
+            <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
+                <button class="vault-btn" style="width: 100%; border: 1px solid #ef4444; color: #ef4444; background: transparent;" onclick="sys.clearCache()">
+                    <i class="mdi mdi-delete-sweep"></i> <span data-i18n="btn_clear_cache">Clear System Cache</span>
+                </button>
+            </div>
+
+            <button class="bottom-nav-btn" onclick="sys.closeProfile()" title="Close">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="register-overlay" class="full-overlay" style="display: none;">
+        <div class="auth-full-container">
+            <div style="width: 120px; height: 120px; margin: 0 auto 25px auto;">
+                <svg viewBox="0 0 512 512" width="100%" height="100%"><use href="#New_Flowork_Logo"/></svg>
+            </div>
+
+            <h2 data-i18n="reg_title">Create Secure Identity</h2>
+
+            <div style="width: 100%; max-width: 350px;">
+                <button class="login-btn" id="btn-generate-key" onclick="sys.generateIdentity()"><i class="mdi mdi-key-plus"></i> <span data-i18n="reg_btn_gen">Generate New Key</span></button>
+
+                <div id="register-result-area" style="display: none; margin-top: 15px;">
+                    <p style="color: #eab308; font-size: 11px; margin-bottom: 5px; font-weight: bold;" data-i18n="reg_warn">⚠️ COPY & SAVE THIS OFFLINE. NO RECOVERY POSSIBLE!</p>
+                    <div class="login-input-area" style="margin-bottom: 10px;">
+                        <textarea id="generated-mnemonic" readonly style="height: 60px; color:#2dd4bf; cursor:pointer;" title="Tap to copy phrase" onclick="sys.copyMnemonic()"></textarea>
+                    </div>
+                    <button class="login-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); margin-bottom: 15px; width: 100%; color: #0ea5e9;" onclick="sys.copyMnemonic()"><i class="mdi mdi-content-copy"></i> <span data-i18n="reg_btn_copy">Copy Secret Code</span></button>
+                    <button class="login-btn" style="background: linear-gradient(135deg, #10b981, #059669);" onclick="sys.showPinSetup()"><i class="mdi mdi-check-circle-outline"></i> <span data-i18n="reg_btn_save">I Have Saved It - Create PIN</span></button>
+                </div>
+
+                <div style="margin-top: 25px;"><a href="#" class="nav-link" onclick="sys.showLogin()" data-i18n="reg_link">Already have a key? Login</a></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pin-setup-overlay" class="auth-page">
+        <div class="auth-content-wrapper">
+            <h2 data-i18n="pin_setup_title" style="margin-bottom: 10px;">Create 6-Digit PIN</h2>
+            <p data-i18n="pin_setup_desc" style="opacity: 0.7; margin-bottom: 30px;">Secure your wallet. This PIN cannot be recovered!</p>
+
+            <div style="width: 100%; max-width: 300px;">
+                <input type="password" id="wallet-pin-create" class="pin-input" maxlength="6" inputmode="numeric" placeholder="******" pattern="[0-9]*" style="text-align: center; font-size: 24px; letter-spacing: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); padding: 15px; border-radius: 12px; width: 100%; margin-bottom: 20px; color: white;">
+
+                <div id="encrypt-progress-bar" style="display:none; color: #0ea5e9; font-weight: bold; font-size: 14px; margin-bottom: 10px;"><span data-i18n="progress_encrypting">Encrypting Vault...</span> <span id="encrypt-percent">0%</span></div>
+
+                <button class="login-btn primary" id="btn-save-pin" onclick="sys.confirmPinSetup()"><i class="mdi mdi-lock"></i> <span data-i18n="btn_save_pin">Encrypt & Save</span></button>
+            </div>
+
+            <button class="bottom-nav-btn" onclick="sys.closePinUnlock(); sys.openRegister()" title="Back">
+                <i class="mdi mdi-arrow-left"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="pin-unlock-overlay" class="full-overlay" style="display: none;">
+        <div class="auth-full-container">
+            <button class="close-btn" onclick="sys.closePinUnlock()" style="position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white;"><i class="mdi mdi-close"></i></button>
+
+            <div style="font-size:50px; margin-bottom:15px;">🔒</div>
+            <h2 data-i18n="pin_unlock_title">Unlock Wallet</h2>
+            <p data-i18n="pin_unlock_desc">Enter your 6-digit PIN to access your wallet.</p>
+
+            <div style="width: 100%; max-width: 300px;">
+                <input type="password" id="wallet-pin-unlock" class="pin-input" maxlength="6" inputmode="numeric" placeholder="******" pattern="[0-9]*" style="text-align: center; font-size: 24px; letter-spacing: 5px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); padding: 15px; border-radius: 12px; width: 100%; margin-bottom: 20px; color: white;">
+
+                <div id="decrypt-progress-bar" style="display:none; color: #0ea5e9; font-weight: bold; font-size: 14px; margin-bottom: 10px;"><span data-i18n="progress_decrypting">Decrypting Vault...</span> <span id="decrypt-percent">0%</span></div>
+
+                <button class="login-btn primary" id="btn-unlock-pin" onclick="sys.confirmPinUnlock()"><i class="mdi mdi-lock-open"></i> <span data-i18n="btn_unlock">Unlock</span></button>
+                <div style="margin-top: 15px;"><a href="#" class="nav-link" style="color:#ff7675;" onclick="sys.logout()" data-i18n="btn_reset_wallet">Forgot PIN? Reset Wallet</a></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="vault-overlay" class="full-overlay" style="display: none;">
+        <div class="vault-card">
+            <div class="vault-header">
+                <h3><i class="mdi mdi-cloud-sync"></i> Cloud API Vault</h3>
+            </div>
+            <div class="v-input-group">
+                <input type="text" id="vault-key-name" placeholder="Key Name (e.g. OPENAI_API_KEY)">
+                <input type="text" id="vault-key-val" placeholder="Secret Key Value">
+                <button class="vault-btn primary" onclick="sys.saveVaultKey()">Save & Sync (Cloud)</button>
+            </div>
+            <div class="vault-list" id="vault-list-container"></div>
+
+            <button class="bottom-nav-btn" onclick="sys.closeVault()" title="Close">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="engines-overlay" class="auth-page">
+        <div class="auth-content-wrapper" style="max-width: 1000px; width: 100%; margin: 0 auto; justify-content: flex-start; padding-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 25px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px;">
+                <h2 style="margin: 0; display: flex; align-items: center; gap: 10px; font-size: 26px; color: #fff;">
+                    <i class="mdi mdi-server-network" style="color:#0ea5e9;"></i> <span data-i18n="engine_page_title">My Engines</span>
+                </h2>
+                <button class="login-btn primary" style="width: auto; margin: 0; padding: 10px 20px; font-size: 14px;" onclick="sys.promptAddEngine()">
+                    <i class="mdi mdi-plus"></i> <span data-i18n="engine_btn_add">Deploy Node</span>
+                </button>
+            </div>
+
+            <div id="engines-loader" style="text-align:center; padding: 40px; width: 100%; display:none;">
+                <div class="spinner" style="width:30px; height:30px; border-width:3px; margin:auto;"></div>
+                <div style="margin-top: 15px; color: #888; font-size: 12px; letter-spacing: 1px;" data-i18n="engine_syncing">SYNCING WITH CLUSTER...</div>
+            </div>
+
+            <div id="engines-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; width: 100%; padding-bottom: 40px;">
+                </div>
+
+            <button class="bottom-nav-btn" onclick="sys.closeEngines()" title="Back" style="margin-top: auto;">
+                <i class="mdi mdi-arrow-left"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="engine-form-overlay" class="full-overlay" style="display: none; z-index: 100005;">
+        <div class="vault-card">
+            <div class="vault-header">
+                <h3 id="engine-form-title"><i class="mdi mdi-server-plus"></i> Deploy Node</h3>
+            </div>
+            <p id="engine-form-desc" style="font-size: 12px; color: #aaa; margin-bottom: 15px;">Enter a unique identifier for your new engine.</p>
+            <div class="v-input-group">
+                <input type="text" id="engine-form-name" placeholder="Node Name (e.g. Worker-01)">
+                <input type="hidden" id="engine-form-mode">
+                <input type="hidden" id="engine-form-target-id">
+
+                <button class="vault-btn primary" id="engine-form-submit" onclick="sys.submitEngineForm()" style="margin-top: 15px;">
+                    <i class="mdi mdi-check"></i> <span data-i18n="engine_btn_submit_form">Submit Form</span>
+                </button>
+            </div>
+            <button class="bottom-nav-btn" onclick="document.getElementById('engine-form-overlay').style.display='none'" title="Close">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="engine-token-overlay" class="full-overlay" style="display: none; z-index: 100006;">
+        <div class="vault-card" style="max-width: 500px; width: 90%;">
+            <div class="vault-header">
+                <h3 data-i18n="engine_success_title"><i class="mdi mdi-check-decagram" style="color:#10b981;"></i> Deployment Success!</h3>
+            </div>
+            <p style="font-size: 12px; color: #eab308; margin-bottom: 20px; font-weight: bold;" data-i18n="engine_success_desc">⚠️ Save these credentials to your engine's .env file. The token will not be shown again.</p>
+
+            <div class="v-input-group" style="text-align: left; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                <label style="font-size: 11px; color:#aaa; margin-bottom: 5px; display:block;">FLOWORK_ENGINE_ID</label>
+                <div style="display:flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" id="engine-success-id" readonly style="font-family: monospace; color: #54d7f6; background: rgba(0,0,0,0.6); padding: 10px; width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                    <button class="vault-btn" onclick="sys.copyEngineCredential('id')" style="width: auto; padding: 0 15px;" title="Copy ID"><i class="mdi mdi-content-copy"></i></button>
+                </div>
+
+                <label style="font-size: 11px; color:#aaa; margin-bottom: 5px; display:block;">FLOWORK_ENGINE_TOKEN</label>
+                <div style="display:flex; gap: 10px;">
+                    <input type="text" id="engine-success-token" readonly style="font-family: monospace; color: #54d7f6; background: rgba(0,0,0,0.6); padding: 10px; width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                    <button class="vault-btn" onclick="sys.copyEngineCredential('token')" style="width: auto; padding: 0 15px;" title="Copy Token"><i class="mdi mdi-content-copy"></i></button>
+                </div>
+            </div>
+
+            <button class="bottom-nav-btn" onclick="document.getElementById('engine-token-overlay').style.display='none'" title="Close">
+                <i class="mdi mdi-check"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="wallet-overlay" class="full-overlay" style="display: none;">
+        <div class="vault-card">
+            <div class="vault-header">
+                <h3 data-i18n="wallet_title"><i class="mdi mdi-wallet"></i> Wallet</h3>
+                <div style="display: flex; align-items: center;">
+                    <select id="wallet-network-select" class="lang-select-box" style="margin-right: 10px; border-color: var(--brand);" onchange="sys.switchNetwork(this.value)">
+                        <option value="polygon">Polygon</option><option value="bsc">BSC (BNB)</option><option value="ethereum">Ethereum</option><option value="arbitrum">Arbitrum</option>
+                    </select>
+                    <button class="vault-btn" onclick="sys.fetchBalance(true)" style="background: transparent; color: #0ea5e9; border: 1px solid var(--border); padding: 5px 8px; margin-right: 10px;" title="Reload Balance"><i class="mdi mdi-refresh"></i></button>
+                </div>
+            </div>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 12px; color: #aaa;" data-i18n="wallet_balance">Total Balance</div>
+                <h2 style="margin: 5px 0; color: #0ea5e9; font-size: 28px;"><span id="wallet-balance-display">0.0000</span> <span id="wallet-symbol-display" style="font-size: 14px;">POL</span></h2>
+                <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 15px; margin: 15px 0; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="text-align: left; overflow: hidden;">
+                        <div style="font-size: 10px; color: #aaa; margin-bottom: 3px;" data-i18n="wallet_your_address">Your Wallet Address</div>
+                        <div style="font-family: monospace; font-size: 11px; color: #2dd4bf; word-break: break-all;" id="wallet-address-display">0x...</div>
+                    </div>
+                    <button class="vault-btn" onclick="sys.copyWalletAddress()" style="background: transparent; color: #0ea5e9; font-size: 20px; border: none; padding: 5px; margin-left: 10px;" title="Copy Address"><i class="mdi mdi-content-copy"></i></button>
+                </div>
+            </div>
+            <div style="margin-bottom: 15px; border-top: 1px solid #333; padding-top: 15px;">
+                <div style="font-size: 12px; color: #aaa; margin-bottom: 10px;" data-i18n="wallet_tokens">Assets / Tokens</div>
+                <div id="wallet-token-list" style="max-height: 120px; overflow-y: auto;"><div style="text-align:center; color:#555; font-size:11px;">Loading assets...</div></div>
+            </div>
+            <div class="v-input-group" style="border-top: 1px solid #333; padding-top: 15px;">
+                <label data-i18n="wallet_send">Send Asset</label>
+                <select id="wallet-send-asset"><option value="native">Native Coin</option></select>
+                <input type="text" id="wallet-send-to" data-i18n-placeholder="wallet_address_placeholder" placeholder="Recipient Address (0x...)">
+                <input type="number" id="wallet-send-amount" data-i18n-placeholder="wallet_amount_placeholder" placeholder="Amount (e.g. 0.01)" step="0.0001">
+                <button class="vault-btn primary" onclick="sys.requestSendCrypto()" style="margin-top: 10px;"><i class="mdi mdi-send"></i> <span data-i18n="wallet_btn_send">Send Now</span></button>
+            </div>
+
+            <button class="bottom-nav-btn" onclick="sys.closeWallet()" title="Close">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/crypto.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
