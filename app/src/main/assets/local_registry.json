@@ -1,0 +1,23 @@
+[
+  {
+    "id": "calculator",
+    "name": "Kalkulator",
+    "category": "Tools",
+    "path": "system_apps/calculator",
+    "icon": "system_apps/calculator/icon.svg",
+    "cover": "system_apps/calculator/cover.webp",
+    "description": "Kalkulator Hybrid",
+    "source": "local",
+    "popular": "yes"
+  },
+  {
+    "id": "pdf-tools",
+    "name": "PDF Merger",
+    "category": "Productivity",
+    "path": "system_apps/split-and-marger-pdf",
+    "icon": "system_apps/split-and-marger-pdf/icon.svg",
+    "cover": "system_apps/split-and-marger-pdf/cover.webp",
+    "description": "Offline PDF Tools",
+    "source": "local"
+  }
+]
